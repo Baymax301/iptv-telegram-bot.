@@ -1,0 +1,191 @@
+
+import asyncio
+import logging
+import requests
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.types import Message
+
+BOT_TOKEN = "7526254974:AAHHM_7N4mW59Vp2E1vJ_qtoklkpudxfvLg"
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+@dp.message(Command("start"))
+async def send_welcome(message: Message):
+    user_name = message.from_user.first_name if message.from_user.first_name else "صديقي"
+    
+    await bot.send_chat_action(message.chat.id, "typing")
+    await asyncio.sleep(1)
+    await message.answer(f"✨ أهلاً بيك يا {user_name}! سعيد جداً بوجودك معانا النهاردة! 😊")
+    
+    await bot.send_chat_action(message.chat.id, "typing")
+    await asyncio.sleep(1.2)
+    await message.answer("🤖 اسمح لي أعرفك بنفسي.. أنا Baymax، مساعدك الشخصي اللي هيسهلك كل حاجة وهيخدمك بكل سعادة")
+    
+    await bot.send_chat_action(message.chat.id, "typing")
+    await asyncio.sleep(1.5)
+    await message.answer("💫 أنا متخصص في مساعدتك تشوف كل التفاصيل عن اشتراكك، وهحاول دايماً أكون عند حسن ظنك")
+    
+    await bot.send_chat_action(message.chat.id, "typing")
+    await asyncio.sleep(1.3)
+    await message.answer(
+        f"📝 علشان أقدر أساعدك يا {user_name}، محتاج منك تبعت لي البيانات دي:\n\n"
+        "host: http://example.com:8080\n"
+        "username: اليوزر بتاعك\n"
+        "password: الباسورد\n\n"
+        "وأنا هجيب لك كل المعلومات اللي انت محتاجها على طول! 🚀"
+    )
+
+def parse_subscription_info(text):
+    lines = text.split('\n')
+    data = {}
+    for line in lines:
+        if line.lower().startswith("host:"):
+            data['host'] = line.split("host:")[1].strip()
+        elif line.lower().startswith("username:"):
+            data['username'] = line.split("username:")[1].strip()
+        elif line.lower().startswith("password:"):
+            data['password'] = line.split("password:")[1].strip()
+    return data
+
+def format_date(timestamp):
+    from datetime import datetime
+    try:
+        dt = datetime.fromtimestamp(int(timestamp))
+        months = ["يناير", "فبراير", "مارس", "إبريل", "مايو", "يونيو", 
+                 "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"]
+        return f"{dt.day} {months[dt.month-1]} {dt.year}"
+    except:
+        return timestamp
+
+def check_subscription(host, username, password):
+    try:
+        session = requests.Session()
+        url = f"{host}/player_api.php?username={username}&password={password}"
+        response = session.get(url, timeout=3)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        if "user_info" not in data:
+            return None
+            
+        # Get media counts with reduced timeout and parallel requests
+        live_count = session.get(f"{host}/player_api.php?username={username}&password={password}&action=get_live_streams", timeout=3).json()
+        vod_count = session.get(f"{host}/player_api.php?username={username}&password={password}&action=get_vod_streams", timeout=3).json()
+        series_count = session.get(f"{host}/player_api.php?username={username}&password={password}&action=get_series", timeout=3).json()
+        
+        user_info = data['user_info']
+        return {
+            "status": user_info.get("status"),
+            "created": format_date(user_info.get("created_at")),
+            "exp_date": format_date(user_info.get("exp_date")),
+            "active_cons": user_info.get("active_cons"),
+            "max_connections": user_info.get("max_connections"),
+            "live_count": len(live_count) if isinstance(live_count, list) else 0,
+            "vod_count": len(vod_count) if isinstance(vod_count, list) else 0,
+            "series_count": len(series_count) if isinstance(series_count, list) else 0
+        }
+    except Exception as e:
+        logging.error(f"Error checking subscription: {e}")
+        return None
+
+@dp.message()
+async def handle_subscription(message: Message):
+    if message.text.startswith("/"):  # Skip command messages
+        return
+        
+    # التعامل مع رسائل الشكر والترحيب
+    thank_words = ["شكرا", "شكراً", "شكرًا", "thanks", "thank you"]
+    hello_words = ["السلام عليكم", "هاي", "هلا", "مرحبا", "hi", "hello"]
+    
+    user_name = message.from_user.first_name if message.from_user.first_name else "صديقي"
+    
+    if any(word in message.text.lower() for word in thank_words):
+        await bot.send_chat_action(message.chat.id, "typing")
+        await asyncio.sleep(1)
+        responses = [
+            f"العفو خالص يا {user_name}! 🌹 سعيد إني قدرت أساعدك",
+            f"على إيه الشكر يا {user_name}! دي حاجة بسيطة 💝",
+            "ده شرف ليا إني أقدر أساعدك! احنا دايماً في خدمتك 🌟",
+            "متشكرش يا غالي! أي حاجة تانية محتاجها، أنا موجود 💫"
+        ]
+        await message.answer(responses[hash(str(message.date)) % len(responses)])
+        return
+        
+    if any(word in message.text.lower() for word in hello_words):
+        await bot.send_chat_action(message.chat.id, "typing")
+        await asyncio.sleep(1)
+        responses = [
+            f"أهلاً بيك يا {user_name}! 🌟 إزيك النهاردة؟",
+            f"منور يا {user_name}! ✨ أقدر أساعدك في إيه؟",
+            "يا أهلاً وسهلاً! 😊 أنا سعيد بوجودك معانا",
+            f"هلا بيك يا {user_name}! 💫 تحت أمرك في أي حاجة"
+        ]
+        await message.answer(responses[hash(str(message.date)) % len(responses)])
+        return
+        
+    await bot.send_chat_action(message.chat.id, "typing")
+    await asyncio.sleep(0.1)
+
+    info = parse_subscription_info(message.text)
+    if not info or 'host' not in info or 'username' not in info or 'password' not in info:
+        await message.answer("يا معلم انت نسيت حاجة في البيانات! طب بص اكتبهملي كده تاني يا كبير:\n"
+                           "host: http://example.com:8080\n"
+                           "username: اسم المستخدم\n"
+                           "password: الباسورد")
+        return
+
+    result = check_subscription(info['host'], info['username'], info['password'])
+
+    if result:
+        await bot.send_chat_action(message.chat.id, "typing")
+        await asyncio.sleep(0.3)
+        is_trial = "نعم" if result.get('is_trial') else "لا"
+        status = "نشط" if result['status'] == "Active" else "غير نشط"
+        
+        reply = (
+            "📊 معلومات الاشتراك الخاص بحضرتك 🌟\n\n"
+            f"👤 إسم المستخدم : {info['username']}\n"
+            f"⭐️ حالة الحساب : {status}\n"
+            f"📅 تاريخ إنتهاء الإشتراك : {result['exp_date']}\n"
+            f"🎯 هل الإشتراك تجريبي : {is_trial}\n"
+            f"📱 عدد الأجهزة النشطة الآن : {result['active_cons']}\n"
+            f"📆 تاريخ إنشاء الحساب : {result['created']}\n"
+            f"💫 عدد الأجهزة الأقصى : {result['max_connections']}\n"
+            f"📺 عدد القنوات : {result['live_count']}\n"
+            f"🎬 عدد الأفلام : {result['vod_count']}\n"
+            f"🎦 عدد المسلسلات : {result['series_count']}\n\n"
+            "❤️ أتمنى أكون أفدتك بالمعلومات دي"
+        )
+    else:
+        reply = "❌ بص يا معلم، في مشكلة في البيانات دي او السيرفر مش راضي يرد علينا دلوقتي 😔\nممكن تشوف البيانات كويس وتجرب تاني يا كبير؟ 🙏"
+
+    await message.answer(reply)
+
+async def main():
+    # تكوين التسجيل مع مستوى WARNING للحد من سجلات الأداء
+    logging.basicConfig(level=logging.WARNING)
+    
+    # إعداد البوت للتعامل مع عدد أكبر من التحديثات في وقت واحد
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+    
+    # بدء البوت مع إعدادات محسنة
+    await dp.start_polling(
+        bot,
+        allowed_updates=["message", "callback_query"],  # تحديد أنواع التحديثات المطلوبة فقط
+        polling_timeout=60,  # زيادة مهلة الاستطلاع
+        handle_signals=True,  # التعامل مع إشارات النظام
+    )
+
+async def on_startup():
+    # تهيئة الموارد عند بدء البوت
+    await bot.delete_webhook(drop_pending_updates=True)  # تجنب التحديثات القديمة المتراكمة
+
+async def on_shutdown():
+    # تنظيف الموارد عند إيقاف البوت
+    await bot.session.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
